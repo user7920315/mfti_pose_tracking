@@ -1,7 +1,141 @@
 import cv2
 import numpy as np
+
+
+class RedMarkerTracker:
+    def __init__(self, min_area=100, max_dist=50):
+        self.min_area = min_area
+        self.max_dist = max_dist
+        self.prev_centers = {}
+        self.next_id = 0
+
+    def get_red_mask(self, frame):
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+        lower1 = np.array([0, 120, 120])
+        upper1 = np.array([15, 255, 255])
+        mask1 = cv2.inRange(hsv, lower1, upper1)
+
+        lower2 = np.array([160, 120, 120])
+        upper2 = np.array([180, 255, 255])
+        mask2 = cv2.inRange(hsv, lower2, upper2)
+
+        mask = cv2.bitwise_or(mask1, mask2)
+
+        kernel = np.ones((5, 5), np.uint8)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        return mask
+
+    def process_frame(self, frame):
+        mask = self.get_red_mask(frame)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        current_markers = []
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area < self.min_area:
+                continue
+
+            M = cv2.moments(cnt)
+            if M["m00"] == 0:
+                continue
+
+            cx, cy = int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])
+            (x, y), r = cv2.minEnclosingCircle(cnt)
+            current_markers.append({
+                'center': (int(x), int(y)),
+                'radius': int(r),
+                'area': area
+            })
+
+
+        markers = self._assign_ids(current_markers)
+        return markers, mask
+
+    def _assign_ids(self, markers):
+        curr_map = {m['center']: m for m in markers}
+        used = set()
+
+        for pid, prev_pos in list(self.prev_centers.items()):
+            best_c = None
+            min_d = float('inf')
+            for c, m in curr_map.items():
+                if c in used: continue
+                d = np.hypot(c[0] - prev_pos[0], c[1] - prev_pos[1])
+                if d < min_d and d < self.max_dist:
+                    min_d, best_c = d, c
+
+            if best_c:
+                curr_map[best_c]['id'] = pid
+                used.add(best_c)
+                self.prev_centers[pid] = best_c
+
+        for c, m in curr_map.items():
+            if c not in used:
+                m['id'] = self.next_id
+                self.prev_centers[self.next_id] = c
+                self.next_id += 1
+
+        return list(curr_map.values())
+
+
+tracker = RedMarkerTracker(min_area=150, max_dist=60)
+history = {}
+cap = cv2.VideoCapture(0)
+
+while True:
+    ret, frame = cap.read()
+    if not ret: break
+
+    markers, mask = tracker.process_frame(frame)
+
+    for m in markers:
+        mid, (x, y), r = m['id'], m['center'], m['radius']
+
+        cv2.circle(frame, (x, y), r, (0, 255, 0), 2)
+        cv2.circle(frame, (x, y), 4, (0, 0, 255), -1)
+        cv2.putText(frame, f"ID:{mid}", (x - 20, y - 15),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+        history.setdefault(mid, []).append((x, y))
+        if len(history[mid]) > 150:
+            history[mid].pop(0)
+
+        pts = np.array(history[mid], dtype=np.int32).reshape((-1, 1, 2))
+        cv2.polylines(frame, [pts], False, (0, 165, 255), 2)
+
+    cv2.imshow('Red Markers', frame)
+    cv2.imshow('Mask', mask)
+    if cv2.waitKey(1) == ord('q'): break
+
+cap.release()
+cv2.destroyAllWindows()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'''import cv2
+import numpy as np
 from collections import deque
 import time
+
 
 
 class StableMarker:
@@ -170,4 +304,4 @@ while True:
         break
 
 cap.release()
-cv2.destroyAllWindows()
+cv2.destroyAllWindows()'''
