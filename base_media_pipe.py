@@ -10,7 +10,6 @@ def get_model_path(task_name, url):
     if not os.path.exists(task_name):
         urllib.request.urlretrieve(url, task_name)
     return task_name
-print()
 
 class FullBodyHandTracker:
     def __init__(self):
