@@ -174,16 +174,15 @@ class FullBodyHandTracker:
                     cv2.circle(output, (x, y), 5, color, -1)
                     self.trajectories[hand_idx].append((x, y))
 
-        # 3. ВАРИАНТ A: КЛАССИФИКАЦИЯ
+
         motion_class, confidence = self.classifier.classify_simple(self.trajectories)
         cv2.putText(output, f"Motion: {motion_class}", (10, 100),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
         cv2.putText(output, f"Conf: {confidence:.2f}", (10, 130),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-        # 4. ВАРИАНТ C: ПРЕДСКАЗАНИЕ (желтые точки)
+
         if 25 in self.trajectories and len(self.trajectories[25]) > 10:
-            # 🔧 Конвертируем deque в список
             predictions = self.predictor.predict_marker(list(self.trajectories[25]), n_steps=5)
 
             if predictions:
